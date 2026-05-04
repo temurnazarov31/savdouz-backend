@@ -1,0 +1,112 @@
+[
+  {
+    "name": "iPhone 15 Pro",
+    "model": "A2848",
+    "category": "Phones",
+    "description": "Apple iPhone 15 Pro 256GB",
+    "pricing": {
+      "initialPrice": 800,
+      "bulkPrice": 950,
+      "retailPrice": 1099
+    }
+  },
+  {
+    "name": "Samsung Galaxy S24",
+    "model": "SM-S921B",
+    "category": "Phones",
+    "description": "Samsung Galaxy S24 128GB",
+    "pricing": {
+      "initialPrice": 600,
+      "bulkPrice": 750,
+      "retailPrice": 899
+    }
+  },
+  {
+    "name": "MacBook Pro 14",
+    "model": "MK183LL/A",
+    "category": "Laptops",
+    "description": "Apple MacBook Pro 14 inch M3",
+    "pricing": {
+      "initialPrice": 1500,
+      "bulkPrice": 1800,
+      "retailPrice": 1999
+    }
+  },
+  {
+    "name": "Dell XPS 15",
+    "model": "XPS-9530",
+    "category": "Laptops",
+    "description": "Dell XPS 15 inch Intel i7",
+    "pricing": {
+      "initialPrice": 1200,
+      "bulkPrice": 1450,
+      "retailPrice": 1699
+    }
+  },
+  {
+    "name": "AirPods Pro",
+    "model": "MQDT3LL/A",
+    "category": "Accessories",
+    "description": "Apple AirPods Pro 2nd Generation",
+    "pricing": {
+      "initialPrice": 150,
+      "bulkPrice": 200,
+      "retailPrice": 249
+    }
+  },
+  {
+    "name": "Samsung 4K Monitor",
+    "model": "LU28R550UQNXZA",
+    "category": "Monitors",
+    "description": "Samsung 28 inch 4K UHD Monitor",
+    "pricing": {
+      "initialPrice": 250,
+      "bulkPrice": 320,
+      "retailPrice": 399
+    }
+  },
+  {
+    "name": "Logitech MX Master 3",
+    "model": "910-005620",
+    "category": "Accessories",
+    "description": "Logitech MX Master 3 Wireless Mouse",
+    "pricing": {
+      "initialPrice": 60,
+      "bulkPrice": 85,
+      "retailPrice": 99
+    }
+  },
+  {
+    "name": "iPad Air 5",
+    "model": "MM9D3LL/A",
+    "category": "Tablets",
+    "description": "Apple iPad Air 5th Generation 64GB",
+    "pricing": {
+      "initialPrice": 450,
+      "bulkPrice": 550,
+      "retailPrice": 649
+    }
+  },
+  {
+    "name": "Sony WH-1000XM5",
+    "model": "WH1000XM5/B",
+    "category": "Accessories",
+    "description": "Sony Noise Cancelling Headphones",
+    "pricing": {
+      "initialPrice": 200,
+      "bulkPrice": 280,
+      "retailPrice": 349
+    }
+  },
+  {
+    "name": "Xiaomi Redmi Note 13",
+    "model": "23090RA98G",
+    "category": "Phones",
+    "description": "Xiaomi Redmi Note 13 128GB",
+    "pricing": {
+      "initialPrice": 150,
+      "bulkPrice": 200,
+      "retailPrice": 249
+    }
+  }
+]

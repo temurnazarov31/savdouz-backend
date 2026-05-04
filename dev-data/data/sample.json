@@ -1,0 +1,82 @@
+[
+  {
+    "name": "Wireless Headphones",
+    "model": "9900",
+    "price": 100,
+    "category": "Electronics",
+    "ratingsAverage": 4.5,
+    "ratingsQuantity": 120
+  },
+  {
+    "name": "Running Shoes",
+    "model": "4324",
+    "price": 80,
+    "category": "Footwear",
+    "ratingsAverage": 4.7,
+    "ratingsQuantity": 200
+  },
+  {
+    "name": "Smart Watch",
+    "model": "4323",
+    "price": 200,
+    "category": "Electronics",
+    "ratingsAverage": 4.2,
+    "ratingsQuantity": 80
+  },
+  {
+    "name": "Backpack",
+    "model": "4326",
+    "price": 50,
+    "category": "Accessories",
+    "ratingsAverage": 4.6,
+    "ratingsQuantity": 150
+  },
+  {
+    "name": "Sunglasses",
+    "model": "7685",
+    "price": 30,
+    "category": "Accessories",
+    "ratingsAverage": 4.3,
+    "ratingsQuantity": 90
+  },
+  {
+    "name": "Bluetooth Speaker",
+    "model": "8655",
+    "price": 60,
+    "category": "Electronics",
+    "ratingsAverage": 4.4,
+    "ratingsQuantity": 110
+  },
+  {
+    "name": "Yoga Mat",
+    "model": "6439",
+    "price": 25,
+    "category": "Fitness",
+    "ratingsAverage": 4.8,
+    "ratingsQuantity": 75
+  },
+  {
+    "name": "Electric Kettle",
+    "model": "6536",
+    "price": 40,
+    "category": "Home Appliances",
+    "ratingsAverage": 4.5,
+    "ratingsQuantity": 60
+  },
+  {
+    "name": "Gaming Mouse",
+    "model": "7543",
+    "price": 50,
+    "category": "Electronics",
+    "ratingsAverage": 4.6,
+    "ratingsQuantity": 130
+  },
+  {
+    "name": "Desk Lamp",
+    "model": "3457",
+    "price": 35,
+    "category": "Home Decor",
+    "ratingsAverage": 4.4,
+    "ratingsQuantity": 85
+  }
+]
