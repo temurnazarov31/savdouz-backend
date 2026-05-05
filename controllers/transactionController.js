@@ -8,9 +8,8 @@ const Warehouse = require('../models/warehouseModel');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
-
 exports.createTransaction = catchAsync(async (req, res, next) => {
-  const { outletId, products, saleSource } = req.body;
+  const { outletId, products, saleSource, priceType, paymentMethod } = req.body;
 
   if (!outletId) return next(new AppError('Please provide outlet ID', 400));
   if (!products || products.length === 0)
@@ -28,16 +27,14 @@ exports.createTransaction = catchAsync(async (req, res, next) => {
       w.user.equals(req.user._id)
     );
 
-    if (!isOwner && !isWorker)
-      return next(new AppError('No permission', 403));
+    if (!isOwner && !isWorker) return next(new AppError('No permission', 403));
   } else {
     const store = await Store.findOne({ _id: outletId });
     if (!store) return next(new AppError('No store found', 404));
     const isOwner = store.owner.equals(req.user._id);
     const isWorker = store.workers?.find((w) => w.user.equals(req.user._id));
 
-    if (!isOwner && !isWorker)
-      return next(new AppError('No permission', 403));
+    if (!isOwner && !isWorker) return next(new AppError('No permission', 403));
   }
 
   const transactionProducts = [];
@@ -46,13 +43,10 @@ exports.createTransaction = catchAsync(async (req, res, next) => {
   let totalQuantity = 0;
 
   for (const item of products) {
-    const { productId, quantity, priceType } = item;
 
     if (!productId) return next(new AppError('Please provide product ID', 400));
     if (!quantity || quantity <= 0)
       return next(new AppError('Invalid quantity', 400));
-    if (!['bulk', 'retail'].includes(priceType))
-      return next(new AppError('Invalid price type', 400));
     let transactedProduct;
     if (saleSource === 'warehouse') {
       transactedProduct = await WhProduct.findOne({
@@ -102,7 +96,6 @@ exports.createTransaction = catchAsync(async (req, res, next) => {
       totalAmount: itemTotalAmount,
       totalProfit: itemTotalProfit,
     });
-
     totalAmount += itemTotalAmount;
     totalProfit += itemTotalProfit;
     totalQuantity += quantity;
