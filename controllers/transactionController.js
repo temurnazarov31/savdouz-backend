@@ -43,6 +43,7 @@ exports.createTransaction = catchAsync(async (req, res, next) => {
   let totalQuantity = 0;
 
   for (const item of products) {
+    const { productId, quantity } = item;
 
     if (!productId) return next(new AppError('Please provide product ID', 400));
     if (!quantity || quantity <= 0)
