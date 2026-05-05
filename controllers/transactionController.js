@@ -105,7 +105,7 @@ exports.createTransaction = catchAsync(async (req, res, next) => {
   const transaction = await Transaction.create({
     outlet: outletId,
     products: transactionProducts,
-    priceType,
+    priceType: req.body.priceType,
     paymentMethod: req.body.paymentMethod,
     totalAmount,
     totalProfit,
