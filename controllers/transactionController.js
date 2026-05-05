@@ -90,7 +90,6 @@ exports.createTransaction = catchAsync(async (req, res, next) => {
       name: transactedProduct.name,
       model: transactedProduct.model,
       quantity,
-      priceType,
       priceAtSale,
       initialPrice: transactedProduct.pricing.initialPrice,
       profit,
@@ -106,6 +105,7 @@ exports.createTransaction = catchAsync(async (req, res, next) => {
   const transaction = await Transaction.create({
     outlet: outletId,
     products: transactionProducts,
+    priceType,
     paymentMethod: req.body.paymentMethod,
     totalAmount,
     totalProfit,
