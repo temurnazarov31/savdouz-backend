@@ -26,11 +26,13 @@ if (process.env.NODE_ENV === 'development') {
 
 // ✅ Rate limiting — max 100 requests per hour per IP
 const limiter = rateLimit({
-  max: process.env.NODE_ENV === 'development' ? 10000 : 100,
+  max: process.env.NODE_ENV === 'development' ? 10000 : 1000,
   windowMs: 60 * 60 * 1000,
   message: 'Too many requests from this IP, please try again in an hour!',
 });
 app.use('/api', limiter);
+
+
 
 // Body parser
 app.use(express.json({ limit: '10kb' })); // limit body size to 10kb
@@ -86,6 +88,7 @@ app.use(
 );
 
 // Routes
+app.use('/api', limiter);
 app.use('/api/v1/products', productRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/stores', storeRouter);
