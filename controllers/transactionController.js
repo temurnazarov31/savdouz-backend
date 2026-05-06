@@ -142,6 +142,62 @@ exports.createTransaction = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.getAllTransactions = catchAsync(async (req, res, next) => {
+  const { startDate, endDate, outletId} = req.query;
+
+  // Build filter
+  const filter = {};
+
+  // Filter by outlet
+  if (outletId) {
+    filter.outlet = outletId;
+  } else {
+    // Get all outlets belonging to the user
+    const stores = await Store.find({ owner: req.user._id }).select('_id');
+    const warehouses = await Warehouse.find({ owner: req.user._id }).select(
+      '_id'
+    );
+    const workerStore = await Store.findOne({
+      'workers.user': req.user._id,
+    }).select('_id');
+    const workerWarehouse = await Warehouse.findOne({
+      'workers.user': req.user._id,
+    }).select('_id');
+
+    const outletIds = [
+      ...stores.map((s) => s._id),
+      ...warehouses.map((w) => w._id),
+      ...(workerStore ? [workerStore._id] : []),
+      ...(workerWarehouse ? [workerWarehouse._id] : []),
+    ];
+
+    filter.outlet = { $in: outletIds };
+  }
+
+  // Filter by date range
+  if (startDate || endDate) {
+    filter.createdAt = {};
+    if (startDate) filter.createdAt.$gte = new Date(startDate);
+    if (endDate)
+      filter.createdAt.$lte = new Date(
+        new Date(endDate).setHours(23, 59, 59, 999)
+      );
+  }
+
+  const [transactions, total] = await Promise.all([
+    Transaction.find(filter)
+      .populate('soldBy', 'outlet')
+      .sort({ createdAt: -1 }),
+    Transaction.countDocuments(filter),
+  ]);
+
+  res.status(200).json({
+    status: 'success',
+    results: transactions.length,
+    data: { transactions },
+  });
+});
+
 // Get all transactions for a store
 exports.getStoreTransactions = catchAsync(async (req, res, next) => {
   const outletId = req.params.outletId;

@@ -7,7 +7,10 @@ const router = express.Router();
 
 router.use(protect);
 
-router.post('/', transactionController.createTransaction);
+router
+  .route('/')
+  .get(transactionController.getAllTransactions)
+  .post(transactionController.createTransaction);
 router.get('/store/:outletId', transactionController.getStoreTransactions);
 router.get('/store/:outletId/daily', transactionController.getDailyReport);
 router.get('/store/:outletId/summary', transactionController.getIncomeSummary);
