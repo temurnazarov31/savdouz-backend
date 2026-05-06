@@ -2,6 +2,7 @@ const WhProduct = require('./../models/whProductModel');
 const APIFeatures = require('./../utils/apiFeatures');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
+const Warehouse = require('../models/warehouseModel');
 
 exports.getAllWarehouseProducts = catchAsync(async (req, res) => {
   const features = new APIFeatures(
