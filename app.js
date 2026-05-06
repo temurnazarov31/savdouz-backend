@@ -24,6 +24,8 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
+app.set('trust proxy', 1);
+
 // ✅ Rate limiting — max 100 requests per hour per IP
 const limiter = rateLimit({
   max: process.env.NODE_ENV === 'development' ? 10000 : 1000,

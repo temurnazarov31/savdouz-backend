@@ -143,7 +143,9 @@ exports.createTransaction = catchAsync(async (req, res, next) => {
 });
 
 exports.getAllTransactions = catchAsync(async (req, res, next) => {
-  const { startDate, endDate, outletId} = req.query;
+  const { startDate, endDate, outletId } = req.query;
+
+  console.log('getAllTransactions called', req.query);
 
   // Build filter
   const filter = {};
