@@ -107,7 +107,7 @@ exports.updateStore = catchAsync(async (req, res, next) => {
     {
       name: req.body.name,
     },
-    { new: true, runValidators: true }
+    { returnDocument: 'after', runValidators: true }
   );
 
   res.status(200).json({

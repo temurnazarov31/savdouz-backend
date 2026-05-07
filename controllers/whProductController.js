@@ -65,7 +65,7 @@ exports.updateWarehouseProduct = catchAsync(async (req, res, next) => {
     req.params.id,
     req.body,
     {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }
   );

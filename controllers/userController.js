@@ -90,7 +90,10 @@ exports.createUser = catchAsync(async (req, res, next) => {
 });
 
 exports.updateUser = catchAsync(async (req, res, next) => {
-  const user = await User.findByIdAndUpdate(req.params.id);
+  const user = await User.findByIdAndUpdate(req.params.id, req.body, {
+    returnDocument: 'after',
+    runValidators: true,
+  });
 
   res.status(200).json({
     status: 'success',

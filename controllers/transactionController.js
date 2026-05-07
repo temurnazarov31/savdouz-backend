@@ -145,8 +145,6 @@ exports.createTransaction = catchAsync(async (req, res, next) => {
 exports.getAllTransactions = catchAsync(async (req, res, next) => {
   const { startDate, endDate, outletId } = req.query;
 
-  console.log('getAllTransactions called', req.query);
-
   // Build filter
   const filter = {};
 
@@ -187,9 +185,7 @@ exports.getAllTransactions = catchAsync(async (req, res, next) => {
   }
 
   const [transactions, total] = await Promise.all([
-    Transaction.find(filter)
-      .populate('soldBy', 'outlet')
-      .sort({ createdAt: -1 }),
+    Transaction.find(filter).populate('soldBy', 'name').sort({ createdAt: -1 }),
     Transaction.countDocuments(filter),
   ]);
 
@@ -251,7 +247,6 @@ exports.getDailyReport = catchAsync(async (req, res, next) => {
   })
     .populate('soldBy', 'name')
     .sort({ createdAt: -1 });
-  const allTransactions = await Transaction.find({}).limit(1);
 
   const totalIncome = transactions.reduce((sum, t) => sum + t.totalAmount, 0);
   const totalProfit = transactions.reduce((sum, t) => sum + t.totalProfit, 0);
