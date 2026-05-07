@@ -48,6 +48,7 @@
     "xss": "^1.0.15"
   },
   "devDependencies": {
+    "eslint": "^10.3.0",
     "nodemon": "^3.1.14",
     "prettier": "^3.8.3"
   }
