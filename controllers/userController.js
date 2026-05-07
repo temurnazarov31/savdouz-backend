@@ -37,6 +37,9 @@ exports.updateMe = catchAsync(async (req, res, next) => {
   // 2) Filter out unwanted fields
   const filteredBody = filterObj(req.body, 'name', 'email', 'phone');
 
+  if (filteredBody.phone === '') filteredBody.phone = undefined;
+  if (filteredBody.email === '') filteredBody.email = undefined;
+
   // 3) Update user
   const updatedUser = await User.findByIdAndUpdate(req.user._id, filteredBody, {
     new: true,
