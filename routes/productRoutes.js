@@ -10,6 +10,7 @@ router.use(protect);
 router.get('/export-barcodes', productController.exportBarcodes);
 router.get('/:id/export-barcode', productController.exportSingleBarcode);
 
+// Products routes
 router
   .route('/')
   .get(productController.getAllMyProducts)

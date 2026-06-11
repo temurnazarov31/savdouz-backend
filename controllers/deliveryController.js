@@ -1,18 +1,16 @@
 // controllers/deliveryController.js
 const Delivery = require('../models/deliveryModel');
-const Store = require('../models/storeModel');
-const Warehouse = require('../models/warehouseModel');
-const StoreProduct = require('../models/storeProductModel');
-const WhProduct = require('../models/whProductModel');
+const Outlet = require('../models/outletModel');
+const OutletProduct = require('../models/outletProductModel');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
 // Helper to get product from source
-const getSourceProduct = async (type, outletId, productId) => {
-  if (type === 'warehouse') {
-    return await WhProduct.findOne({ warehouse: outletId, product: productId });
-  }
-  return await StoreProduct.findOne({ store: outletId, product: productId });
+const getSourceProduct = async (outletId, productId) => {
+  return await OutletProduct.findOne({
+    outlet: outletId,
+    product: productId,
+  });
 };
 
 // Helper to add product to destination
@@ -21,126 +19,97 @@ const addToDestination = async (
   outletId,
   productId,
   name,
+  brand, 
   model,
+  barcode,
   pricing,
   quantity
 ) => {
-  if (type === 'warehouse') {
-    const existing = await WhProduct.findOne({
-      warehouse: outletId,
-      product: productId,
-    });
-    if (existing) {
-      existing.quantity += quantity;
-      await existing.save();
-    } else {
-      await WhProduct.create({
-        warehouse: outletId,
-        product: productId,
-        name,
-        model,
-        pricing,
-        quantity,
-      });
-    }
+  const existing = await OutletProduct.findOne({
+    outlet: outletId,
+    product: productId,
+  });
+  if (existing) {
+    existing.quantity += quantity;
+    await existing.save();
   } else {
-    const existing = await StoreProduct.findOne({
-      store: outletId,
+    await OutletProduct.create({
+      outlet: outletId,
       product: productId,
+      name,
+      brand,
+      model,
+      barcode,
+      pricing,
+      quantity,
     });
-    if (existing) {
-      existing.quantity += quantity;
-      await existing.save();
-    } else {
-      await StoreProduct.create({
-        store: outletId,
-        product: productId,
-        name,
-        model,
-        pricing,
-        quantity,
-      });
-    }
   }
 };
 
 // Helper to verify ownership
-const verifyOwnership = async (type, outletId, userId) => {
-  if (type === 'warehouse') {
-    const warehouse = await Warehouse.findById(outletId);
-    return warehouse && warehouse.owner.equals(userId);
-  }
-  const store = await Store.findById(outletId);
-  return store && store.owner.equals(userId);
+const verifyAccess = async (outletId, userId) => {
+  const outlet = await Outlet.findById(outletId).select('owner workers').lean();
+  if (!outlet) return false;
+  const isOwner = outlet.owner.equals(userId);
+  const isWorker = outlet.workers?.some((w) => w.user.equals(userId));
+  return isOwner || isWorker;
 };
 
 // Create delivery
 exports.createDelivery = catchAsync(async (req, res, next) => {
   const { fromType, fromId, toType, toId, products, note } = req.body;
 
-  // Validate inputs
-  if (!fromType || !fromId || !toType || !toId) {
-    return next(new AppError('Please provide source and destination', 400));
-  }
+  if (!fromType || !fromId || !toType || !toId)
+    return next(new AppError('SOURCE_DEST_REQUIRED', 400));
   if (
     !['store', 'warehouse'].includes(fromType) ||
     !['store', 'warehouse'].includes(toType)
-  ) {
-    return next(new AppError('Invalid outlet type', 400));
-  }
-  if (fromId === toId) {
-    return next(new AppError('Source and destination cannot be the same', 400));
-  }
-  if (!products || products.length === 0) {
-    return next(new AppError('Please provide at least one product', 400));
-  }
+  )
+    return next(new AppError('INVALID_OUTLET_TYPE', 400));
+  if (fromId === toId) return next(new AppError('SAME_SOURCE_DEST', 400));
+  if (!products || products.length === 0)
+    return next(new AppError('PRODUCTS_REQUIRED', 400));
 
-  // Check ownership of both source and destination
-  const ownsFrom = await verifyOwnership(fromType, fromId, req.user._id);
-  if (!ownsFrom)
-    return next(new AppError('You do not have access to source', 403));
+  const ownsFrom = await verifyAccess(fromId, req.user._id);
+  if (!ownsFrom) return next(new AppError('NO_ACCESS_TO_SOURCE', 403));
 
-  const ownsTo = await verifyOwnership(toType, toId, req.user._id);
-  if (!ownsTo)
-    return next(new AppError('You do not have access to destination', 403));
+  const ownsTo = await verifyAccess(toId, req.user._id);
+  if (!ownsTo) return next(new AppError('NO_ACCESS_TO_DESTINATION', 403));
+
+  // fetch outlet names for snapshot
+  const [sourceOutlet, destOutlet] = await Promise.all([
+    Outlet.findById(fromId).select('name').lean(),
+    Outlet.findById(toId).select('name').lean(),
+  ]);
+  if (!sourceOutlet) return next(new AppError('OUTLET_NOT_FOUND', 404));
+  if (!destOutlet) return next(new AppError('OUTLET_NOT_FOUND', 404));
 
   const deliveryProducts = [];
 
-  // Process each product
   for (const item of products) {
     const { productId, quantity } = item;
 
-    if (!quantity || quantity <= 0) {
-      return next(new AppError('Invalid quantity', 400));
-    }
+    if (!quantity || quantity <= 0)
+      return next(new AppError('INVALID_QUANTITY', 400));
 
-    // Get product from source
-    const sourceProduct = await getSourceProduct(fromType, fromId, productId);
+    const sourceProduct = await getSourceProduct(fromId, productId);
 
-    if (!sourceProduct) {
-      return next(new AppError(`Product not found in source`, 404));
-    }
+    if (!sourceProduct) return next(new AppError('PRODUCT_NOT_IN_SOURCE', 404));
 
-    if (sourceProduct.quantity < quantity) {
-      return next(
-        new AppError(
-          `Not enough stock for ${sourceProduct.name}. Available: ${sourceProduct.quantity}`,
-          400
-        )
-      );
-    }
+    if (sourceProduct.quantity < quantity)
+      return next(new AppError('INSUFFICIENT_STOCK', 400));
 
-    // Decrease from source
     sourceProduct.quantity -= quantity;
     await sourceProduct.save();
 
-    // Add to destination
     await addToDestination(
       toType,
       toId,
       productId,
       sourceProduct.name,
+      sourceProduct.brand,
       sourceProduct.model,
+      sourceProduct.barcode,
       sourceProduct.pricing,
       quantity
     );
@@ -148,17 +117,21 @@ exports.createDelivery = catchAsync(async (req, res, next) => {
     deliveryProducts.push({
       product: productId,
       name: sourceProduct.name,
+      brand: sourceProduct.brand,
       model: sourceProduct.model,
+      barcode: sourceProduct.barcode,
+      pricing: sourceProduct.pricing,
       quantity,
     });
   }
 
-  // Create delivery log
   const delivery = await Delivery.create({
     from: fromId,
     fromType,
+    fromName: sourceOutlet.name,
     to: toId,
     toType,
+    toName: destOutlet.name,
     products: deliveryProducts,
     sentBy: req.user._id,
     note,
@@ -172,51 +145,35 @@ exports.createDelivery = catchAsync(async (req, res, next) => {
 
 // Get all deliveries for an outlet
 exports.getDeliveries = catchAsync(async (req, res, next) => {
-  const outletId = req.params.outletId;
-  const store = await Store.findOne({ _id: outletId });
-  const warehouse = await Warehouse.findOne({
-    _id: outletId,
-  });
+  const { outletId } = req.params;
 
-  if (!store && !warehouse) {
-    return next(new AppError('No outlet found or no permission', 403));
-  }
+  const outlet = await Outlet.findById(outletId).select('owner workers').lean();
+  if (!outlet) return next(new AppError('OUTLET_NOT_FOUND', 404));
+
+  const isOwner = outlet.owner.equals(req.user._id);
+  const isWorker = outlet.workers?.some((w) => w.user.equals(req.user._id));
+  if (!isOwner && !isWorker) return next(new AppError('FORBIDDEN', 403));
 
   const deliveries = await Delivery.find({
     $or: [{ from: outletId }, { to: outletId }],
-  }).sort('-createdAt');
-
-  // Attach names manually
-  const allStores = await Store.find().select('name');
-  const allWarehouses = await Warehouse.find().select('name');
-
-  const getName = (id, type) => {
-    if (type === 'store') {
-      return allStores.find((s) => s._id.equals(id))?.name || 'Unknown Store';
-    }
-    return (
-      allWarehouses.find((w) => w._id.equals(id))?.name || 'Unknown Warehouse'
-    );
-  };
-
-  const deliveriesWithNames = deliveries.map((d) => ({
-    ...d.toObject(),
-    fromName: getName(d.from, d.fromType),
-    toName: getName(d.to, d.toType),
-  }));
+  })
+    .populate('sentBy', 'name')
+    .sort('-createdAt')
+    .lean();
 
   res.status(200).json({
     status: 'success',
     results: deliveries.length,
-    data: { deliveries: deliveriesWithNames },
+    data: { deliveries },
   });
 });
 
 // Get all deliveries for current user
 exports.getAllMyDeliveries = catchAsync(async (req, res, next) => {
-  const deliveries = await Delivery.find({
-    sentBy: req.user._id,
-  }).sort('-createdAt');
+  const deliveries = await Delivery.find({ sentBy: req.user._id })
+    .populate('sentBy', 'name')
+    .sort('-createdAt')
+    .lean();
 
   res.status(200).json({
     status: 'success',

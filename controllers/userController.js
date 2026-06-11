@@ -1,9 +1,9 @@
-// controllers/userController.js
 const User = require('../models/userModel');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
-// Helper to filter allowed fields
+// ─── Helpers ───────────────────────────────────────────────
+
 const filterObj = (obj, ...allowedFields) => {
   const newObj = {};
   Object.keys(obj).forEach((el) => {
@@ -12,59 +12,48 @@ const filterObj = (obj, ...allowedFields) => {
   return newObj;
 };
 
-// Get my profile
+// ─── GET MY PROFILE ────────────────────────────────────────
+// GET /api/v1/users/getMe
 exports.getMe = catchAsync(async (req, res, next) => {
-  const user = await User.findById(req.user._id);
+  const user = await User.findById(req.user._id).lean();
 
-  res.status(200).json({
-    status: 'success',
-    data: { user },
-  });
+  res.status(200).json({ status: 'success', data: { user } });
 });
 
-// Update name / email
+// ─── UPDATE MY PROFILE ─────────────────────────────────────
+// PATCH /api/v1/users/updateMe
 exports.updateMe = catchAsync(async (req, res, next) => {
-  // 1) Error if user tries to update password here
   if (req.body.password || req.body.passwordConfirm) {
-    return next(
-      new AppError(
-        'This route is not for password updates. Please use /updateMyPassword',
-        400
-      )
-    );
+    return next(new AppError('USE_UPDATE_PASSWORD_ROUTE', 400));
   }
 
-  // 2) Filter out unwanted fields
-  const filteredBody = filterObj(req.body, 'name', 'email', 'phone');
+  const filteredBody = filterObj(req.body, 'name', 'email', 'phone', 'username', 'surname');
 
-  if (filteredBody.phone === '') filteredBody.phone = undefined;
-  if (filteredBody.email === '') filteredBody.email = undefined;
+  // Remove empty strings — don't overwrite with empty
+  Object.keys(filteredBody).forEach((key) => {
+    if (filteredBody[key] === '') delete filteredBody[key];
+  });
 
-  // 3) Update user
-  const updatedUser = await User.findByIdAndUpdate(req.user._id, filteredBody, {
+  const user = await User.findByIdAndUpdate(req.user._id, filteredBody, {
     new: true,
     runValidators: true,
-  });
+  }).lean();
 
-  res.status(200).json({
-    status: 'success',
-    data: { user: updatedUser },
-  });
+  res.status(200).json({ status: 'success', data: { user } });
 });
 
-// Delete my account (set inactive)
+// ─── DELETE MY ACCOUNT ─────────────────────────────────────
+// DELETE /api/v1/users/deleteMe
 exports.deleteMe = catchAsync(async (req, res, next) => {
   await User.findByIdAndUpdate(req.user._id, { active: false });
 
-  res.status(204).json({
-    status: 'success',
-    data: null,
-  });
+  res.status(204).json({ status: 'success', data: null });
 });
 
-// Admin — get all users
+// ─── ADMIN — GET ALL USERS ─────────────────────────────────
+// GET /api/v1/users
 exports.getAllUsers = catchAsync(async (req, res, next) => {
-  const users = await User.find();
+  const users = await User.find().lean();
 
   res.status(200).json({
     status: 'success',
@@ -73,44 +62,43 @@ exports.getAllUsers = catchAsync(async (req, res, next) => {
   });
 });
 
+// ─── ADMIN — GET SINGLE USER ───────────────────────────────
+// GET /api/v1/users/:id
 exports.getUser = catchAsync(async (req, res, next) => {
-  const user = await User.findById(req.params.id);
+  const user = await User.findById(req.params.id).lean();
 
-  res.status(200).json({
-    status: 'success',
-    data: { user },
-  });
+  if (!user) return next(new AppError('USER_NOT_FOUND', 404));
+
+  res.status(200).json({ status: 'success', data: { user } });
 });
 
-exports.createUser = catchAsync(async (req, res, next) => {
-  res.status(500).json({
-    status: 'error',
-    message: 'The field is not defined, please use login or signup',
-  });
-});
-
+// ─── ADMIN — UPDATE USER ───────────────────────────────────
+// PATCH /api/v1/users/:id
 exports.updateUser = catchAsync(async (req, res, next) => {
   const user = await User.findByIdAndUpdate(req.params.id, req.body, {
-    returnDocument: 'after',
+    new: true,
     runValidators: true,
-  });
+  }).lean();
 
-  res.status(200).json({
-    status: 'success',
-    data: { user },
-  });
+  if (!user) return next(new AppError('USER_NOT_FOUND', 404));
+
+  res.status(200).json({ status: 'success', data: { user } });
 });
 
-// Admin — delete user
+// ─── ADMIN — DELETE USER ───────────────────────────────────
+// DELETE /api/v1/users/:id
 exports.deleteUser = catchAsync(async (req, res, next) => {
-  const user = await User.findByIdAndDelete(req.params.id);
+  const user = await User.findByIdAndDelete(req.params.id).lean();
 
-  if (!user) {
-    return next(new AppError('No user found with that ID', 404));
-  }
+  if (!user) return next(new AppError('USER_NOT_FOUND', 404));
 
-  res.status(204).json({
-    status: 'success',
-    data: null,
-  });
+  res.status(204).json({ status: 'success', data: null });
 });
+
+// ─── NOT IMPLEMENTED ───────────────────────────────────────
+exports.createUser = (req, res) => {
+  res.status(405).json({
+    status: 'error',
+    code: 'USE_SIGNUP_ROUTE',
+  });
+};

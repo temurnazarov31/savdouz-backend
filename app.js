@@ -10,10 +10,11 @@ const AppError = require('./utils/appError');
 
 const productRoutes = require('./routes/productRoutes');
 const userRoutes = require('./routes/userRoutes');
-const storeRouter = require('./routes/storeRoutes');
-const warehouseRouter = require('./routes/warehouseRoutes');
+const outletRoutes = require('./routes/outletRoutes');
+const workerRoutes = require('./routes/workerRoutes');
 const transactionRouter = require('./routes/transactionRoutes');
 const deliveryRouter = require('./routes/deliveryRoutes');
+const clientRouter = require('./routes/clientRoutes');
 
 const app = express();
 
@@ -33,8 +34,6 @@ const limiter = rateLimit({
   message: 'Too many requests from this IP, please try again in an hour!',
 });
 app.use('/api', limiter);
-
-
 
 // Body parser
 app.use(express.json({ limit: '10kb' })); // limit body size to 10kb
@@ -93,11 +92,11 @@ app.use(
 app.use('/api', limiter);
 app.use('/api/v1/products', productRoutes);
 app.use('/api/v1/users', userRoutes);
-app.use('/api/v1/stores', storeRouter);
-app.use('/api/v1/warehouses', warehouseRouter);
+app.use('/api/v1/outlets', outletRoutes);
+app.use('/api/v1/workers', workerRoutes);
 app.use('/api/v1/transactions', transactionRouter);
 app.use('/api/v1/deliveries', deliveryRouter);
-
+app.use('/api/v1/clients', clientRouter);
 // Handle undefined routes
 app.all('*splat', (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));

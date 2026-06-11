@@ -7,6 +7,7 @@ const router = express.Router();
 
 router.use(protect);
 
+// Deivery routes
 router.post('/', deliveryController.createDelivery);
 router.get('/my', deliveryController.getAllMyDeliveries);
 router.get('/outlet/:outletId', deliveryController.getDeliveries);

@@ -1,124 +1,29 @@
-// controllers/transactionController.js
 const Transaction = require('../models/transactionModel');
 const DailyReport = require('../models/dailyReportModel');
-const StoreProduct = require('../models/storeProductModel');
-const WhProduct = require('../models/whProductModel');
-const Store = require('../models/storeModel');
-const Warehouse = require('../models/warehouseModel');
+const Outlet = require('../models/outletModel');
+const OutletProduct = require('../models/outletProductModel');
+const Client = require('../models/clientModel');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
+const { addDebt } = require('./clientController');
 
-exports.createTransaction = catchAsync(async (req, res, next) => {
-  const { outletId, products, saleSource, priceType, paymentMethod } = req.body;
+// ─── Helpers ───────────────────────────────────────────────
 
-  if (!outletId) return next(new AppError('Please provide outlet ID', 400));
-  if (!products || products.length === 0)
-    return next(new AppError('Please provide at least one product', 400));
-  if (!['store', 'warehouse'].includes(saleSource))
-    return next(new AppError('Invalid sale source', 400));
+const getOwnerId = (user) => (user.role === 'owner' ? user._id : user.owner);
 
-  // Check access
-  if (saleSource === 'warehouse') {
-    const warehouse = await Warehouse.findOne({ _id: outletId });
-    if (!warehouse) return next(new AppError('No warehouse found', 404));
+const verifyOutletAccess = async (outletId, userId, next) => {
+  const outlet = await Outlet.findById(outletId).select('owner workers').lean();
+  if (!outlet) return next(new AppError('OUTLET_NOT_FOUND', 404));
 
-    const isOwner = warehouse.owner.equals(req.user._id);
-    const isWorker = warehouse.workers?.find((w) =>
-      w.user.equals(req.user._id)
-    );
+  const isOwner = outlet.owner.equals(userId);
+  const isWorker = outlet.workers?.some((w) => w.user.equals(userId));
+  if (!isOwner && !isWorker) return next(new AppError('FORBIDDEN', 403));
 
-    if (!isOwner && !isWorker) return next(new AppError('No permission', 403));
-  } else {
-    const store = await Store.findOne({ _id: outletId });
-    if (!store) return next(new AppError('No store found', 404));
-    const isOwner = store.owner.equals(req.user._id);
-    const isWorker = store.workers?.find((w) => w.user.equals(req.user._id));
+  return outlet;
+};
 
-    if (!isOwner && !isWorker) return next(new AppError('No permission', 403));
-  }
-
-  const transactionProducts = [];
-  let totalAmount = 0;
-  let totalProfit = 0;
-  let totalQuantity = 0;
-
-  for (const item of products) {
-    const { productId, quantity } = item;
-
-    if (!productId) return next(new AppError('Please provide product ID', 400));
-    if (!quantity || quantity <= 0)
-      return next(new AppError('Invalid quantity', 400));
-    let transactedProduct;
-    if (saleSource === 'warehouse') {
-      transactedProduct = await WhProduct.findOne({
-        warehouse: outletId,
-        product: productId,
-      });
-    } else {
-      transactedProduct = await StoreProduct.findOne({
-        store: outletId,
-        product: productId,
-      });
-    }
-
-    if (!transactedProduct)
-      return next(new AppError(`Product not found in ${saleSource}`, 404));
-    if (transactedProduct.quantity < quantity) {
-      return next(
-        new AppError(
-          `Not enough stock for ${transactedProduct.name}. Available: ${transactedProduct.quantity}`,
-          400
-        )
-      );
-    }
-
-    // Decrease quantity
-    transactedProduct.quantity -= quantity;
-    await transactedProduct.save();
-
-    const priceAtSale =
-      priceType === 'bulk'
-        ? transactedProduct.pricing.bulkPrice
-        : transactedProduct.pricing.retailPrice;
-
-    const profit = priceAtSale - transactedProduct.pricing.initialPrice;
-    const itemTotalAmount = priceAtSale * quantity;
-    const itemTotalProfit = profit * quantity;
-
-    transactionProducts.push({
-      product: productId,
-      name: transactedProduct.name,
-      model: transactedProduct.model,
-      quantity,
-      priceAtSale,
-      initialPrice: transactedProduct.pricing.initialPrice,
-      profit,
-      totalAmount: itemTotalAmount,
-      totalProfit: itemTotalProfit,
-    });
-    totalAmount += itemTotalAmount;
-    totalProfit += itemTotalProfit;
-    totalQuantity += quantity;
-  }
-
-  // Create single transaction with all products
-  const transaction = await Transaction.create({
-    outlet: outletId,
-    products: transactionProducts,
-    priceType: req.body.priceType,
-    paymentMethod: req.body.paymentMethod,
-    totalAmount,
-    totalProfit,
-    totalQuantity,
-    soldBy: req.user._id,
-    saleSource,
-    date: new Date().toISOString().split('T')[0],
-  });
-
-  // Update daily report
-  const today = new Date().toISOString().split('T')[0];
+const getOrCreateDailyReport = async (outletId, today) => {
   let report = await DailyReport.findOne({ outlet: outletId, date: today });
-
   if (!report) {
     report = await DailyReport.create({
       outlet: outletId,
@@ -129,52 +34,176 @@ exports.createTransaction = catchAsync(async (req, res, next) => {
       transactions: [],
     });
   }
+  return report;
+};
 
-  report.totalIncome += totalAmount;
+// ─── CREATE TRANSACTION ────────────────────────────────────
+// POST /api/v1/transactions
+exports.createTransaction = catchAsync(async (req, res, next) => {
+  const {
+    clientId,
+    newClient,
+    outletId,
+    products,
+    saleSource,
+    priceType,
+    paymentMethod,
+    debt,
+    discount,
+  } = req.body;
+
+  // Validations
+  if (!outletId) return next(new AppError('OUTLET_ID_REQUIRED', 400));
+  if (!products?.length) return next(new AppError('PRODUCTS_REQUIRED', 400));
+  if (!['store', 'warehouse'].includes(saleSource))
+    return next(new AppError('INVALID_SALE_SOURCE', 400));
+
+  // Verify outlet access (single query for both store and warehouse)
+  const outlet = await verifyOutletAccess(outletId, req.user._id, next);
+  if (!outlet) return; // verifyOutletAccess already called next()
+
+  // Process products
+  const transactionProducts = [];
+  let totalAmount = 0;
+  let totalProfit = 0;
+  let totalQuantity = 0;
+
+  for (const item of products) {
+    const { productId, quantity } = item;
+
+    if (!productId) return next(new AppError('PRODUCT_ID_REQUIRED', 400));
+    if (!quantity || quantity <= 0)
+      return next(new AppError('INVALID_QUANTITY', 400));
+
+    const transactedProduct = await OutletProduct.findOne({
+      outlet: outletId,
+      product: productId,
+    });
+
+    if (!transactedProduct)
+      return next(new AppError('PRODUCT_NOT_IN_OUTLET', 404));
+    if (transactedProduct.quantity < quantity) {
+      return next(new AppError('INSUFFICIENT_STOCK', 400));
+    }
+
+    transactedProduct.quantity -= quantity;
+    await transactedProduct.save();
+
+    const priceAtSale =
+      priceType === 'wholesale'
+        ? transactedProduct.pricing.wholesalePrice
+        : transactedProduct.pricing.retailPrice;
+
+    const profit = priceAtSale - transactedProduct.pricing.costPrice;
+    const itemTotalAmount = priceAtSale * quantity;
+    const itemTotalProfit = profit * quantity;
+
+    transactionProducts.push({
+      product: productId,
+      name: transactedProduct.name,
+      model: transactedProduct.model,
+      quantity,
+      priceAtSale,
+      initialPrice: transactedProduct.pricing.costPrice,
+      profit,
+      totalAmount: itemTotalAmount,
+      totalProfit: itemTotalProfit,
+    });
+
+    totalAmount += itemTotalAmount;
+    totalProfit += itemTotalProfit;
+    totalQuantity += quantity;
+  }
+
+  // Apply discount
+  const discountAmount = discount ? Math.min(Number(discount), totalAmount) : 0;
+  if (discountAmount > 0) {
+    totalProfit = Math.max(0, totalProfit - discountAmount);
+  }
+
+  const paidAmount = totalAmount - discountAmount - (Number(debt) || 0);
+
+  // Resolve client
+  let resolvedClientId = clientId || null;
+
+  if (!clientId && newClient?.name) {
+    const client = await Client.create({
+      name: newClient.name,
+      phone: newClient.phone || undefined,
+      note: newClient.note || undefined,
+      owner: getOwnerId(req.user),
+      debt: Number(debt) || 0,
+    });
+    resolvedClientId = client._id;
+  } else if (clientId && Number(debt) > 0) {
+    await addDebt(clientId, Number(debt));
+  }
+
+  // Create transaction
+  const today = new Date().toISOString().split('T')[0];
+  const transaction = await Transaction.create({
+    outlet: outletId,
+    products: transactionProducts,
+    priceType,
+    paymentMethod,
+    totalAmount,
+    paidAmount,
+    debt: Number(debt) || 0,
+    discount: discountAmount,
+    client: resolvedClientId,
+    totalProfit,
+    totalQuantity,
+    soldBy: req.user._id,
+    saleSource,
+    date: today,
+  });
+
+  // Update daily report
+  const report = await getOrCreateDailyReport(outletId, today);
+  report.totalIncome += paidAmount;
   report.totalProfit += totalProfit;
   report.totalTransactions += 1;
   report.transactions.push(transaction._id);
   await report.save();
 
-  res.status(201).json({
-    status: 'success',
-    data: { transaction },
-  });
+  res.status(201).json({ status: 'success', data: { transaction } });
 });
 
+// ─── GET ALL TRANSACTIONS ──────────────────────────────────
+// GET /api/v1/transactions
 exports.getAllTransactions = catchAsync(async (req, res, next) => {
-  const { startDate, endDate, outletId } = req.query;
-
-  // Build filter
+  const { startDate, endDate, outletId, clientId } = req.query;
   const filter = {};
 
-  // Filter by outlet
+  // Client filter — early return
+  if (clientId) {
+    filter.client = clientId;
+    const transactions = await Transaction.find(filter)
+      .populate('soldBy', 'name')
+      .sort({ createdAt: -1 })
+      .lean();
+    return res.status(200).json({
+      status: 'success',
+      results: transactions.length,
+      data: { transactions },
+    });
+  }
+
+  // Outlet filter
   if (outletId) {
     filter.outlet = outletId;
   } else {
-    // Get all outlets belonging to the user
-    const stores = await Store.find({ owner: req.user._id }).select('_id');
-    const warehouses = await Warehouse.find({ owner: req.user._id }).select(
-      '_id'
-    );
-    const workerStore = await Store.findOne({
-      'workers.user': req.user._id,
-    }).select('_id');
-    const workerWarehouse = await Warehouse.findOne({
-      'workers.user': req.user._id,
-    }).select('_id');
+    // Get all accessible outlets in one query
+    const isWorker = req.user.role === 'worker';
 
-    const outletIds = [
-      ...stores.map((s) => s._id),
-      ...warehouses.map((w) => w._id),
-      ...(workerStore ? [workerStore._id] : []),
-      ...(workerWarehouse ? [workerWarehouse._id] : []),
-    ];
+    const outlets = isWorker
+      ? await Outlet.find({ 'workers.user': req.user._id }).select('_id').lean()
+      : await Outlet.find({ owner: req.user._id }).select('_id').lean();
 
-    filter.outlet = { $in: outletIds };
+    filter.outlet = { $in: outlets.map((o) => o._id) };
   }
 
-  // Filter by date range
+  // Date range filter
   if (startDate || endDate) {
     filter.createdAt = {};
     if (startDate) filter.createdAt.$gte = new Date(startDate);
@@ -184,10 +213,10 @@ exports.getAllTransactions = catchAsync(async (req, res, next) => {
       );
   }
 
-  const [transactions, total] = await Promise.all([
-    Transaction.find(filter).populate('soldBy', 'name').sort({ createdAt: -1 }),
-    Transaction.countDocuments(filter),
-  ]);
+  const transactions = await Transaction.find(filter)
+    .populate('soldBy', 'name')
+    .sort({ createdAt: -1 })
+    .lean();
 
   res.status(200).json({
     status: 'success',
@@ -196,48 +225,31 @@ exports.getAllTransactions = catchAsync(async (req, res, next) => {
   });
 });
 
-// Get all transactions for a store
+// ─── GET OUTLET TRANSACTIONS ───────────────────────────────
+// GET /api/v1/transactions/outlet/:outletId
 exports.getStoreTransactions = catchAsync(async (req, res, next) => {
-  const outletId = req.params.outletId;
-  const store = await Store.findOne({ _id: outletId, owner: req.user._id });
-  const warehouse = await Warehouse.findOne({
-    _id: outletId,
-    owner: req.user._id,
-  });
-
-  if (!store && !warehouse) {
-    return next(new AppError('You do not have access to this outlet', 403));
-  }
-
-  const isStoreOwner = store?.owner?.equals(req.user._id);
-  const storeWorker = store?.workers?.find((w) => w.user.equals(req.user._id));
-  const isWarehouseOwner = warehouse?.owner?.equals(req.user._id);
-  const warehouseWorker = warehouse?.workers?.find((w) =>
-    w.user.equals(req.user._id)
+  const outlet = await verifyOutletAccess(
+    req.params.outletId,
+    req.user._id,
+    next
   );
+  if (!outlet) return;
 
-  if (!isStoreOwner && !storeWorker && !isWarehouseOwner && !warehouseWorker) {
-    return next(
-      new AppError('Only the owner or workers can get stoer transactions', 403)
-    );
-  }
+  const transactions = await Transaction.find({ outlet: req.params.outletId })
+    .populate('client', 'name debt')
+    .populate('soldBy', 'name')
+    .sort({ createdAt: -1 })
+    .lean();
 
-  const transactions = await Transaction.find({
-    outlet: req.params.outletId,
-  }).exec();
-
-  if (!transactions) {
-    return next(new AppError('No transactions yet'), 404);
-  }
-
-  return res.status(200).json({
+  res.status(200).json({
     status: 'success',
     results: transactions.length,
     data: { transactions },
   });
 });
 
-// Get daily report for a store
+// ─── GET DAILY REPORT ──────────────────────────────────────
+// GET /api/v1/transactions/outlet/:outletId/daily?date=2026-05-01
 exports.getDailyReport = catchAsync(async (req, res, next) => {
   const date = req.query.date || new Date().toISOString().split('T')[0];
 
@@ -246,7 +258,8 @@ exports.getDailyReport = catchAsync(async (req, res, next) => {
     date,
   })
     .populate('soldBy', 'name')
-    .sort({ createdAt: -1 });
+    .sort({ createdAt: -1 })
+    .lean();
 
   const totalIncome = transactions.reduce((sum, t) => sum + t.totalAmount, 0);
   const totalProfit = transactions.reduce((sum, t) => sum + t.totalProfit, 0);
@@ -268,11 +281,10 @@ exports.getDailyReport = catchAsync(async (req, res, next) => {
   });
 });
 
-// Get income summary (last 7 days, 30 days, custom range)
+// ─── GET INCOME SUMMARY ────────────────────────────────────
+// GET /api/v1/transactions/outlet/:outletId/summary?days=7
 exports.getIncomeSummary = catchAsync(async (req, res, next) => {
-  // ?days=7 or ?days=30 or ?startDate=2026-01-01&endDate=2026-03-18
   const { days, startDate, endDate } = req.query;
-
   const filter = { outlet: req.params.outletId };
 
   if (startDate && endDate) {
@@ -281,10 +293,10 @@ exports.getIncomeSummary = catchAsync(async (req, res, next) => {
     const daysAgo = parseInt(days) || 7;
     const start = new Date();
     start.setDate(start.getDate() - daysAgo);
-    filter.date = { $gte: start.toISOString().split('T')[0] }; // ← add this line
+    filter.date = { $gte: start.toISOString().split('T')[0] };
   }
 
-  const reports = await DailyReport.find(filter).sort('date');
+  const reports = await DailyReport.find(filter).sort('date').lean();
 
   const totalIncome = reports.reduce((sum, r) => sum + r.totalIncome, 0);
   const totalProfit = reports.reduce((sum, r) => sum + r.totalProfit, 0);

@@ -5,6 +5,7 @@ const deliverySchema = new mongoose.Schema(
   {
     from: {
       type: mongoose.Schema.ObjectId,
+      ref: 'Outlet',
       required: [true, 'Delivery must have a source'],
     },
     fromType: {
@@ -12,8 +13,10 @@ const deliverySchema = new mongoose.Schema(
       enum: ['store', 'warehouse'],
       required: [true, 'Delivery must have a source type'],
     },
+    fromName: { type: String },
     to: {
       type: mongoose.Schema.ObjectId,
+      ref: 'Outlet',
       required: [true, 'Delivery must have a destination'],
     },
     toType: {
@@ -21,6 +24,7 @@ const deliverySchema = new mongoose.Schema(
       enum: ['store', 'warehouse'],
       required: [true, 'Delivery must have a destination type'],
     },
+    toName: { type: String },
     products: [
       {
         product: {
@@ -42,7 +46,6 @@ const deliverySchema = new mongoose.Schema(
       enum: ['pending', 'delivered', 'cancelled'],
       default: 'delivered',
     },
-    note: String,
     date: {
       type: String,
       default: () => new Date().toISOString().split('T')[0],

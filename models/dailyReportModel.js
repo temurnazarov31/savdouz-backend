@@ -1,20 +1,34 @@
-// models/dailyReportModel.js
 const mongoose = require('mongoose');
+
+// ─── Daily Report ──────────────────────────────────────────
 
 const dailyReportSchema = new mongoose.Schema(
   {
     outlet: {
       type: mongoose.Schema.ObjectId,
-      ref: 'store warehouse',
-      required: [true, 'Report must belong to a store or warehouse'],
+      ref: 'Outlet',
+      required: [true, 'Report must belong to an outlet'],
+      index: true,
     },
     date: {
-      type: String, // stored as 'YYYY-MM-DD'
+      type: Date,
       required: true,
     },
-    totalIncome: { type: Number, default: 0 }, // total revenue
-    totalProfit: { type: Number, default: 0 }, // actual profit
-    totalTransactions: { type: Number, default: 0 },
+    totalIncome: {
+      type: Number,
+      default: 0,
+      set: (v) => Math.round(v * 100) / 100,
+    },
+    totalProfit: {
+      type: Number,
+      default: 0,
+      set: (v) => Math.round(v * 100) / 100,
+    },
+    totalTransactions: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     transactions: [
       {
         type: mongoose.Schema.ObjectId,
@@ -22,13 +36,12 @@ const dailyReportSchema = new mongoose.Schema(
       },
     ],
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-// One report per store per day
-dailyReportSchema.index({ outlet: 1, date: 1 }, { unique: true });
+// ─── Indexes ───────────────────────────────────────────────
 
-const DailyReport = mongoose.model('DailyReport', dailyReportSchema);
-module.exports = DailyReport;
+dailyReportSchema.index({ outlet: 1, date: -1 });
+dailyReportSchema.index({ outlet: 1, date: 1 }, { unique: true }); // one report per outlet per day
+
+module.exports = mongoose.model('DailyReport', dailyReportSchema);

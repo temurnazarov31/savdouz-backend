@@ -1,10 +1,17 @@
 const mongoose = require('mongoose');
 
+// ─── Product (catalog) ─────────────────────────────────────
+
 const productSchema = new mongoose.Schema(
   {
     name: {
       type: String,
       required: [true, 'Product must have a name'],
+      trim: true,
+      maxlength: [100, 'Product name cannot exceed 100 characters'],
+    },
+    brand: {
+      type: String,
       trim: true,
     },
     model: {
@@ -13,20 +20,37 @@ const productSchema = new mongoose.Schema(
       trim: true,
     },
     pricing: {
-      initialPrice: {
+      costPrice: {
         type: Number,
-        required: [true, 'Product must have an initial price'],
+        required: [true, 'Product must have a cost price'],
         min: [0, 'Price cannot be negative'],
-        set: (v) => Math.floor(v),
+        set: (v) => Math.round(v * 100) / 100,
       },
-      bulkPrice: {
+      wholesalePrice: {
         type: Number,
         min: [0, 'Price cannot be negative'],
+        set: (v) => Math.round(v * 100) / 100,
+        validate: {
+          validator: function (v) {
+            return v == null || v >= this.pricing.costPrice;
+          },
+          message: 'WHOLESALE_BELOW_COST',
+        },
       },
       retailPrice: {
         type: Number,
-        required: [true, 'Product must have a retail price'],
         min: [0, 'Price cannot be negative'],
+        set: (v) => Math.round(v * 100) / 100,
+        validate: {
+          validator: function (v) {
+            return (
+              v >= this.pricing.costPrice &&
+              (this.pricing.wholesalePrice == null ||
+                v >= this.pricing.wholesalePrice)
+            );
+          },
+          message: 'RETAIL_BELOW_WHOLESALE_OR_COST',
+        },
       },
     },
     owner: {
@@ -34,22 +58,22 @@ const productSchema = new mongoose.Schema(
       ref: 'User',
       required: [true, 'Product must have an owner'],
     },
-    quantity: {
-      type: Number,
-      default: 0,
-    },
     barcode: {
       type: String,
+      trim: true,
       unique: true,
       sparse: true,
+      index: true,
+      required: true
     },
   },
-  {
-    timestamps: true,
-    toJSON: { virtuals: true },
-    toO: { virtuals: true },
-  }
+  { timestamps: true }
 );
 
-const Product = mongoose.model('Product', productSchema);
-module.exports = Product;
+// ─── Indexes ───────────────────────────────────────────────
+
+productSchema.index({ owner: 1 });
+productSchema.index({ owner: 1, barcode: 1 });
+productSchema.index({ name: 'text', model: 'text' }); // text search
+
+module.exports = mongoose.model('Product', productSchema);
