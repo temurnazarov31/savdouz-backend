@@ -30,27 +30,11 @@ const productSchema = new mongoose.Schema(
         type: Number,
         min: [0, 'Price cannot be negative'],
         set: (v) => Math.round(v * 100) / 100,
-        validate: {
-          validator: function (v) {
-            return v == null || v >= this.pricing.costPrice;
-          },
-          message: 'WHOLESALE_BELOW_COST',
-        },
       },
       retailPrice: {
         type: Number,
         min: [0, 'Price cannot be negative'],
         set: (v) => Math.round(v * 100) / 100,
-        validate: {
-          validator: function (v) {
-            return (
-              v >= this.pricing.costPrice &&
-              (this.pricing.wholesalePrice == null ||
-                v >= this.pricing.wholesalePrice)
-            );
-          },
-          message: 'RETAIL_BELOW_WHOLESALE_OR_COST',
-        },
       },
     },
     owner: {

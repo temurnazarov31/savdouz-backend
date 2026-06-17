@@ -181,6 +181,18 @@ exports.getMyProduct = catchAsync(async (req, res, next) => {
 // ─── CREATE PRODUCT ────────────────────────────────────────
 // POST /api/v1/products
 exports.createProduct = catchAsync(async (req, res, next) => {
+  const { pricing } = req.body;
+
+  if (pricing) {
+    const { costPrice, wholesalePrice, retailPrice } = pricing;
+    if (wholesalePrice <= costPrice)
+      return next(new AppError('WHOLESALE_BELOW_COST', 400));
+    if (retailPrice <= wholesalePrice)
+      return next(new AppError('RETAIL_BELOW_WHOLESALE', 400));
+    if (retailPrice <= costPrice)
+      return next(new AppError('RETAIL_BELOW_COST', 400));
+  }
+  
   if (req.body.barcode) {
     await checkBarcodeDuplicate(req.body.barcode, null, next);
   }
@@ -193,6 +205,17 @@ exports.createProduct = catchAsync(async (req, res, next) => {
 // ─── UPDATE PRODUCT ────────────────────────────────────────
 // PATCH /api/v1/products/:id
 exports.updateProduct = catchAsync(async (req, res, next) => {
+  const { pricing } = req.body;
+
+  if (pricing) {
+    const { costPrice, wholesalePrice, retailPrice } = pricing;
+    if (wholesalePrice <= costPrice)
+      return next(new AppError('WHOLESALE_BELOW_COST', 400));
+    if (retailPrice <= wholesalePrice)
+      return next(new AppError('RETAIL_BELOW_WHOLESALE', 400));
+    if (retailPrice <= costPrice)
+      return next(new AppError('RETAIL_BELOW_COST', 400));
+  }
   const product = await Product.findById(req.params.id).select('owner').lean();
 
   if (!product) return next(new AppError('PRODUCT_NOT_FOUND', 404));
