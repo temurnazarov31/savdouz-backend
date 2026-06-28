@@ -112,8 +112,15 @@ exports.getMyOutlet = catchAsync(async (req, res, next) => {
 
   if (!outlet) return next(new AppError('NOT_ATTACHED_TO_OUTLET', 404));
 
-  res.status(200).json({ status: 'success', data: { outlet } });
-});
+  const productsCount = await OutletProduct.countDocuments({
+    outlet: outlet._id,
+  });
+
+  res.status(200).json({
+    status: 'success',
+    data: { outlet: { ...outlet, productsCount } },
+  });
+});   
 
 // ─── UPDATE OUTLET ─────────────────────────────────────────
 // PATCH /api/v1/outlets/:outletId

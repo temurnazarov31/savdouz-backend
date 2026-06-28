@@ -19,7 +19,7 @@ const addToDestination = async (
   outletId,
   productId,
   name,
-  brand, 
+  brand,
   model,
   barcode,
   pricing,
@@ -73,10 +73,6 @@ exports.createDelivery = catchAsync(async (req, res, next) => {
   const ownsFrom = await verifyAccess(fromId, req.user._id);
   if (!ownsFrom) return next(new AppError('NO_ACCESS_TO_SOURCE', 403));
 
-  const ownsTo = await verifyAccess(toId, req.user._id);
-  if (!ownsTo) return next(new AppError('NO_ACCESS_TO_DESTINATION', 403));
-
-  // fetch outlet names for snapshot
   const [sourceOutlet, destOutlet] = await Promise.all([
     Outlet.findById(fromId).select('name').lean(),
     Outlet.findById(toId).select('name').lean(),
@@ -84,8 +80,8 @@ exports.createDelivery = catchAsync(async (req, res, next) => {
   if (!sourceOutlet) return next(new AppError('OUTLET_NOT_FOUND', 404));
   if (!destOutlet) return next(new AppError('OUTLET_NOT_FOUND', 404));
 
-  const deliveryProducts = [];
-
+  // STEP 1 — validate everything first, fetch all source products
+  const sourceProducts = [];
   for (const item of products) {
     const { productId, quantity } = item;
 
@@ -99,13 +95,20 @@ exports.createDelivery = catchAsync(async (req, res, next) => {
     if (sourceProduct.quantity < quantity)
       return next(new AppError('INSUFFICIENT_STOCK', 400));
 
+    sourceProducts.push({ sourceProduct, quantity });
+  }
+
+  // STEP 2 — everything validated, now safe to mutate
+  const deliveryProducts = [];
+
+  for (const { sourceProduct, quantity } of sourceProducts) {
     sourceProduct.quantity -= quantity;
     await sourceProduct.save();
 
     await addToDestination(
       toType,
       toId,
-      productId,
+      sourceProduct.product,
       sourceProduct.name,
       sourceProduct.brand,
       sourceProduct.model,
@@ -115,7 +118,7 @@ exports.createDelivery = catchAsync(async (req, res, next) => {
     );
 
     deliveryProducts.push({
-      product: productId,
+      product: sourceProduct.product,
       name: sourceProduct.name,
       brand: sourceProduct.brand,
       model: sourceProduct.model,

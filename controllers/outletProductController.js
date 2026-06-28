@@ -54,7 +54,8 @@ exports.updateOutletProduct = catchAsync(async (req, res, next) => {
     .lean();
 
   if (!outlet) return next(new AppError('OUTLET_NOT_FOUND', 404));
-  if (!outlet.owner.equals(req.user._id)) return next(new AppError('FORBIDDEN', 403));
+  if (!outlet.owner.equals(req.user._id))
+    return next(new AppError('FORBIDDEN', 403));
 
   const updated = await OutletProduct.findByIdAndUpdate(
     req.params.id,
@@ -79,7 +80,8 @@ exports.deleteOutletProduct = catchAsync(async (req, res, next) => {
     .lean();
 
   if (!outlet) return next(new AppError('OUTLET_NOT_FOUND', 404));
-  if (!outlet.owner.equals(req.user._id)) return next(new AppError('FORBIDDEN', 403));
+  if (!outlet.owner.equals(req.user._id))
+    return next(new AppError('FORBIDDEN', 403));
 
   await OutletProduct.findByIdAndDelete(req.params.id);
 
